@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -9,10 +11,6 @@ type person struct {
 }
 
 func main() {
-	// p1 := person{
-	// 	First: "Jenny",
-	// }
-
 	// p2 := person{
 	// 	First: "James",
 	// }
@@ -37,7 +35,14 @@ func main() {
 }
 
 func encode(w http.ResponseWriter, r *http.Request) {
+	p1 := person{
+		First: "Jenny",
+	}
 
+	err := json.NewEncoder(w).Encode(p1)
+	if err != nil {
+		log.Println("Enconded bad data", err)
+	}
 }
 
 func decode(w http.ResponseWriter, r *http.Request) {
