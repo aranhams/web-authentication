@@ -2,4 +2,7 @@ module github.com/aranhams/web-authentication
 
 go 1.13
 
-require golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 // indirect
+require (
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 // indirect
+)

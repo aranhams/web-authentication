@@ -4,7 +4,6 @@
 *.dll
 *.so
 *.dylib
-*.sum
 
 # Test binary, built with `go test -c`
 *.test
@@ -17,3 +16,6 @@
 
 # workspaces
 *.code-workspace
+
+# Extra files
+hmac.go
