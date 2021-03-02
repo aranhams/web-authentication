@@ -1,153 +1,100 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha512"
 	"fmt"
 	"io"
-	"log"
+	"net/http"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/gofrs/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
-type UserClaims struct {
-	jwt.StandardClaims
-	SessionID int64
-}
-
-func (u *UserClaims) Valid() error {
-	if !u.VerifyExpiresAt(time.Now().Unix(), true) {
-		return fmt.Errorf("Token has expired")
-	}
-
-	if u.SessionID == 0 {
-		return fmt.Errorf("Invalid session ID")
-	}
-
-	return nil
-}
-
 func main() {
-	pass := "12345"
-
-	hashedPass, err := hashPassword(pass)
-	if err != nil {
-		panic(err)
-	}
-
-	err = comparePassword(pass, hashedPass)
-	if err != nil {
-		log.Fatalln("Not logged in")
-	}
-
-	log.Println("Logged in!")
+	http.HandleFunc("/", home)
+	http.HandleFunc("/submit", submit)
+	http.ListenAndServe(":8080", nil)
 }
 
-func hashPassword(password string) ([]byte, error) {
-	bs, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("Error while generating bcrypt hash from password: %w", err)
+func getJWT(msg string) (string, error) {
+	myKey := "ilovenoncomplexpasswords"
+
+	type myClaims struct {
+		jwt.StandardClaims
+		Email string
 	}
-	return bs, nil
+
+	claims := myClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
+		},
+		Email: msg,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
+	ss, err := token.SignedString([]byte(myKey))
+	if err != nil {
+		return "", fmt.Errorf("couldn't SignedString %w", err)
+	}
+
+	return ss, nil
 }
 
-func comparePassword(password string, hashedPass []byte) error {
-	err := bcrypt.CompareHashAndPassword(hashedPass, []byte(password))
-	if err != nil {
-		return fmt.Errorf("Invalid password: %w", err)
+func submit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
-	return nil
+
+	email := r.FormValue("email")
+	if email == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	ss, err := getJWT(email)
+	if err != nil {
+		http.Error(w, "coudn't get JWT", http.StatusInternalServerError)
+		return
+	}
+
+	c := http.Cookie{
+		Name:  "session",
+		Value: ss,
+	}
+
+	http.SetCookie(w, &c)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func signMessage(msg []byte) ([]byte, error) {
-	h := hmac.New(sha512.New, keys[currentKid].key)
-
-	_, err := h.Write(msg)
+func home(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("session")
 	if err != nil {
-		return nil, fmt.Errorf("Error in signMessage while hashing message: %w", err)
+		c = &http.Cookie{}
 	}
 
-	signature := h.Sum(nil)
-	return signature, nil
-}
+	// isEqual := false
 
-func checkSig(msg, sig []byte) (bool, error) {
-	newSig, err := signMessage(msg)
-	if err != nil {
-		return false, fmt.Errorf("Error in checkSig while getting signature of message: %w", err)
+	message := "Not logged in"
+	if isEqual {
+		message = "Logged in"
 	}
 
-	same := hmac.Equal(newSig, sig)
-	return same, nil
-}
-
-func createToken(c *UserClaims) (string, error) {
-	t := jwt.NewWithClaims(jwt.SigningMethodHS512, c)
-	signedToken, err := t.SignedString(keys[currentKid])
-	if err != nil {
-		return "", fmt.Errorf("Error in createToken when signing token: %w", err)
-	}
-	return signedToken, nil
-}
-
-func generateNewKey() error {
-	newKey := make([]byte, 64)
-	_, err := io.ReadFull(rand.Reader, newKey)
-	if err != nil {
-		return fmt.Errorf("Error in generateNewKey while generating key: %w", err)
-	}
-
-	uid, err := uuid.NewV4()
-	if err != nil {
-		return fmt.Errorf("error in generateNewKey while generating kid: %w", err)
-	}
-
-	keys[uid.String()] = key{
-		key:     newKey,
-		created: time.Now(),
-	}
-	currentKid = uid.String()
-
-	return nil
-}
-
-type key struct {
-	key     []byte
-	created time.Time
-}
-
-var currentKid = ""
-var keys = map[string]key{}
-
-func parseToken(signedToken string) (*UserClaims, error) {
-	t, err := jwt.ParseWithClaims(signedToken, &UserClaims{}, func(t *jwt.Token) (interface{}, error) {
-		if t.Method.Alg() != jwt.SigningMethodHS512.Alg() {
-			return nil, fmt.Errorf("Invalid signing algorithm")
-		}
-
-		kid, ok := t.Header["kid"].(string)
-		if !ok {
-			return nil, fmt.Errorf("Invalid key ID")
-		}
-
-		k, ok := keys[kid]
-		if !ok {
-			return nil, fmt.Errorf("Invalid key ID")
-		}
-
-		return k.key, nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Error in parseToken while parsing token: %w", err)
-	}
-
-	if !t.Valid {
-		return nil, fmt.Errorf("Error in parseToken, token is not valid")
-	}
-
-	return t.Claims.(*UserClaims), err
+	html := `<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta http-equiv="X-UA-Compatible" content="ie=edge">
+		<title>HMAC Example</title>
+	</head>
+	<body>
+		<p>Cookie value: ` + c.Value + `</p>
+		<p>` + message + `</p>
+		<form action="/submit" method="post">
+			<input type="email" name="email" />
+			<input type="submit" />
+		</form>
+	</body>
+	</html>`
+	io.WriteString(w, html)
 }
