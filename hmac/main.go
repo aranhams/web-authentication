@@ -1,71 +1,53 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha512"
-	"fmt"
-	"log"
-
-	"golang.org/x/crypto/bcrypt"
+	"io"
+	"net/http"
 )
 
-var key = []byte{}
-
 func main() {
-	// it's an insecure key
-	for i := 1; i <= 64; i++ {
-		key = append(key, byte(i))
-	}
-
-	pass := "12345"
-
-	hashedPass, err := hashPassword(pass)
-	if err != nil {
-		panic(err)
-	}
-
-	err = comparePassword(pass, hashedPass)
-	if err != nil {
-		log.Fatalln("Not logged in")
-	}
-
-	log.Println("Logged in!")
+	http.HandleFunc("/", home)
+	http.HandleFunc("/submit", submit)
+	http.ListenAndServe(":8080", nil)
 }
 
-func hashPassword(password string) ([]byte, error) {
-	bs, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("Error while generating bcrypt hash from password: %w", err)
-	}
-	return bs, nil
+func getCode(msg string) string {
+	
 }
 
-func comparePassword(password string, hashedPass []byte) error {
-	err := bcrypt.CompareHashAndPassword(hashedPass, []byte(password))
-	if err != nil {
-		return fmt.Errorf("Invalid password: %w", err)
+func home(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
-	return nil
+
+	email := r.FormValue("email")
+	if email == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	c := http.Cookie{
+		Name:  "session",
+		Value: "",
+	}
 }
 
-func signMessage(msg []byte) ([]byte, error) {
-	h := hmac.New(sha512.New, key)
-
-	_, err := h.Write(msg)
-	if err != nil {
-		return nil, fmt.Errorf("Error in signMessage while hashing message: %w", err)
-	}
-
-	signature := h.Sum(nil)
-	return signature, nil
-}
-
-func checkSig(msg, sig []byte) (bool, error) {
-	newSig, err := signMessage(msg)
-	if err != nil {
-		return false, fmt.Errorf("Error in checkSig while getting signature of message: %w", err)
-	}
-
-	same := hmac.Equal(newSig, sig)
-	return same, nil
+func submit(w http.ResponseWriter, r *http.Request) {
+	html := `<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>HMAC Example</title>
+	</head>
+	<body>
+		<form action"/submit" method="POST">
+			<input type="email" name="email" />
+			<input type="submit" />
+		</form>
+	</body>
+	</html>`
+	io.WriteString(w, html)
 }
