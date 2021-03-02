@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"net/http"
 )
@@ -12,10 +15,12 @@ func main() {
 }
 
 func getCode(msg string) string {
-	
+	h := hmac.New(sha256.New, []byte("ilovenoncomplexpasswords"))
+	h.Write([]byte(msg))
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func home(w http.ResponseWriter, r *http.Request) {
+func submit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -27,23 +32,34 @@ func home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	code := getCode(email)
+
 	c := http.Cookie{
 		Name:  "session",
-		Value: "",
+		Value: code + "|" + email,
 	}
+
+	http.SetCookie(w, &c)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func submit(w http.ResponseWriter, r *http.Request) {
+func home(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("session")
+	if err != nil {
+		c = &http.Cookie{}
+	}
+
 	html := `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
-		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta http-equiv="X-UA-Compatible" content="ie=edge">
 		<title>HMAC Example</title>
 	</head>
 	<body>
-		<form action"/submit" method="POST">
+		<p>Cookie value: ` + c.Value + `</p>
+		<form action="/submit" method="post">
 			<input type="email" name="email" />
 			<input type="submit" />
 		</form>
