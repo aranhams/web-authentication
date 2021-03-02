@@ -9,6 +9,13 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
+type myClaims struct {
+	jwt.StandardClaims
+	Email string
+}
+
+const myKey = "ilovenoncomplexpasswords"
+
 func main() {
 	http.HandleFunc("/", home)
 	http.HandleFunc("/submit", submit)
@@ -16,12 +23,6 @@ func main() {
 }
 
 func getJWT(msg string) (string, error) {
-	myKey := "ilovenoncomplexpasswords"
-
-	type myClaims struct {
-		jwt.StandardClaims
-		Email string
-	}
 
 	claims := myClaims{
 		StandardClaims: jwt.StandardClaims{
@@ -72,12 +73,21 @@ func home(w http.ResponseWriter, r *http.Request) {
 		c = &http.Cookie{}
 	}
 
-	// isEqual := false
+	ss := c.Value
+	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVerificationToken *jwt.Token) (interface{}, error) {
+		return []byte(myKey), nil
+	})
+
+	isEqual := afterVerificationToken.Valid && err == nil
 
 	message := "Not logged in"
 	if isEqual {
 		message = "Logged in"
 	}
+
+	claims := afterVerificationToken.Claims.(*myClaims)
+	fmt.Println(claims.Email)
+	fmt.Println(claims.ExpiresAt)
 
 	html := `<!DOCTYPE html>
 	<html lang="en">
