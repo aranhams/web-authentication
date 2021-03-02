@@ -9,6 +9,12 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
+func main() {
+	http.HandleFunc("/", home)
+	http.HandleFunc("/submit", submit)
+	http.ListenAndServe(":8080", nil)
+}
+
 type myClaims struct {
 	jwt.StandardClaims
 	Email string
@@ -16,14 +22,7 @@ type myClaims struct {
 
 const myKey = "ilovenoncomplexpasswords"
 
-func main() {
-	http.HandleFunc("/", home)
-	http.HandleFunc("/submit", submit)
-	http.ListenAndServe(":8080", nil)
-}
-
 func getJWT(msg string) (string, error) {
-
 	claims := myClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
@@ -75,19 +74,21 @@ func home(w http.ResponseWriter, r *http.Request) {
 
 	ss := c.Value
 	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVerificationToken *jwt.Token) (interface{}, error) {
+		if beforeVerificationToken.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, fmt.Errorf("SOMEONE TRIED TO HACK changed signing method")
+		}
 		return []byte(myKey), nil
 	})
 
-	isEqual := afterVerificationToken.Valid && err == nil
+	isEqual := err == nil && afterVerificationToken.Valid
 
 	message := "Not logged in"
 	if isEqual {
 		message = "Logged in"
+		claims := afterVerificationToken.Claims.(*myClaims)
+		fmt.Println(claims.Email)
+		fmt.Println(claims.ExpiresAt)
 	}
-
-	claims := afterVerificationToken.Claims.(*myClaims)
-	fmt.Println(claims.Email)
-	fmt.Println(claims.ExpiresAt)
 
 	html := `<!DOCTYPE html>
 	<html lang="en">
